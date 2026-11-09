@@ -77,6 +77,20 @@ document.querySelectorAll('[data-dsd-dot]').length
 
 审批弹窗出现时，对应行应为 `data-dsd-state="feedback"`，圆点呈配置的橙红并带环/脉冲；运行中的行是 `running`，保持黄色。
 
+## 覆盖自检（为什么不依赖加载顺序）
+
+官方圆点用的是**内联样式**（非 important），本插件注入的是带 `!important` 的样式表规则。按 CSS 层叠：important 的作者样式 **永远压过** 非 important 的内联声明——与两个插件谁先加载、谁后重绘都无关。选择器又基于行属性 `[data-dsd-state]`，所以对方删掉再重建圆点，规则依然命中。
+
+运行时可自证：
+
+```js
+// 每行：期望色 vs 浏览器实际解析出的色
+__dshSessionDots.report()
+// 全部 match: true → 覆盖成功；有 false → 那一行被别的东西压住了
+```
+
+`report()` 只读，不改任何状态。
+
 ## 与官方插件共存
 
 - `overlay` 模式**不产生新元素**，所以不会出现两个点；它只覆盖颜色/描边，官方插件的点击、归档、菜单全部照旧。

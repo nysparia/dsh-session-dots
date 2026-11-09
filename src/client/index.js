@@ -7,14 +7,22 @@
 //   own: hide the foreign dot and draw our own element. Use this when you are
 //     not running another dot provider.
 //
+// Why the override survives any load order: the official dot is coloured with
+// an *inline, non-important* style, and a stylesheet declaration carrying
+// `!important` outranks it in the cascade no matter which plugin ran first or
+// which one repaints last. Our selectors are attribute-based, so they also keep
+// matching when the other plugin removes and recreates its element.
+//
 // Nothing here throws on purpose: a client plugin that fails to activate takes
-// the whole web boot down, so every entry point is wrapped.
+// the whole web boot down, so every entry point is wrapped. HMR re-evaluates
+// bundles, so install() is a singleton guarded through window.__dshSessionDots.
 import { normalizeConfig, resolveDotState, buildCss } from './logic.js'
 
 const ROW_SELECTOR = '[role="treeitem"][data-row-key^="session:"]'
 const DOT_ATTR = 'data-dsd-dot'
 const ROW_ATTR = 'data-dsd-state'
 const CLICKABLE_ATTR = 'data-dsd-clickable'
+const GLOBAL_KEY = '__dshSessionDots'
 
 function sessionIdOf(row) {
   const key = row.getAttribute('data-row-key') || ''
@@ -36,6 +44,27 @@ function writeManual(key, set) {
   } catch (e) {
     /* storage disabled: the dot still works, the mark just will not persist */
   }
+}
+
+function parseColor(value) {
+  if (typeof value !== 'string') return null
+  const v = value.trim().toLowerCase()
+  const hex = v.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/)
+  if (hex) {
+    const h = hex[1]
+    const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16))
+  }
+  const rgb = v.match(/^rgba?\(\s*(\d+)\s*[, ]\s*(\d+)\s*[, ]\s*(\d+)/)
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+  return null
+}
+
+function sameColor(a, b) {
+  const x = parseColor(a)
+  const y = parseColor(b)
+  if (!x || !y) return null
+  return x[0] === y[0] && x[1] === y[1] && x[2] === y[2]
 }
 
 function install(config) {
@@ -104,6 +133,34 @@ function install(config) {
     dot.dataset.dsdId = id
   }
 
+  // Evidence that our colour actually reached the pixels: compare what the
+  // browser resolved against what the config asked for. A mismatch means
+  // somebody else's declaration still wins (or the state never reached us).
+  const report = () => {
+    const out = []
+    let rows = []
+    try {
+      rows = [...document.querySelectorAll(ROW_SELECTOR)]
+    } catch (e) {
+      return out
+    }
+    for (const row of rows) {
+      const state = row.getAttribute(ROW_ATTR)
+      if (!state) continue
+      const dot = row.querySelector('.dsd-dot') || row.querySelector('.dsm-dot')
+      const expected = cfg.colors[state]
+      const actual = dot ? getComputedStyle(dot).backgroundColor : '(no dot)'
+      out.push({
+        row: (row.getAttribute('data-row-key') || '').slice(0, 28),
+        state,
+        expected,
+        actual,
+        match: dot ? sameColor(actual, expected) : false,
+      })
+    }
+    return out
+  }
+
   let queued = false
   const schedule = () => {
     if (queued) return
@@ -130,7 +187,7 @@ function install(config) {
 
   // The sidebar mounts asynchronously and some state changes are not DOM
   // mutations we can observe (the host may only update its own store), so keep a
-  // slow sweep. Three rows of work once a second is not measurable.
+  // slow sweep. A handful of rows once a second is not measurable.
   const timer = setInterval(schedule, 1000)
   disposers.push(() => clearInterval(timer))
 
@@ -147,18 +204,43 @@ function install(config) {
     document.querySelectorAll('[' + DOT_ATTR + ']').forEach((dot) => dot.remove())
   })
 
-  return () => {
-    for (const dispose of disposers) {
+  const dispose = () => {
+    for (const fn of disposers) {
       try {
-        dispose()
+        fn()
       } catch (e) {
         /* best effort */
       }
     }
   }
+
+  const handle = { config: cfg, paint, report, dispose }
+  try {
+    window[GLOBAL_KEY] = handle
+  } catch (e) {
+    /* ignore */
+  }
+  disposers.push(() => {
+    try {
+      if (window[GLOBAL_KEY] === handle) delete window[GLOBAL_KEY]
+    } catch (e) {
+      /* ignore */
+    }
+  })
+
+  return dispose
 }
 
 function apply(ctx, config) {
+  // HMR re-evaluates this bundle. A previous instance may still be installed
+  // (and its observers still running), so tear it down before installing.
+  try {
+    const previous = window.__dshSessionDots
+    if (previous && typeof previous.dispose === 'function') previous.dispose()
+  } catch (e) {
+    /* ignore */
+  }
+
   try {
     if (ctx && typeof ctx.effect === 'function') {
       ctx.effect(() => install(config), 'dsh-session-dots: sidebar dots')
