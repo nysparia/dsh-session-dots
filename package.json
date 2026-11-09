@@ -5,6 +5,9 @@
   "description": "Configurable sidebar session status dots for DeepSeek Harness: recolour the official dot in place (overlay) or draw your own, with a distinct waiting-for-approval marker.",
   "type": "module",
   "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/nysparia/dsh-session-dots.git" },
+  "homepage": "https://github.com/nysparia/dsh-session-dots#readme",
+  "bugs": { "url": "https://github.com/nysparia/dsh-session-dots/issues" },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
