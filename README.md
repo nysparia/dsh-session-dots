@@ -105,7 +105,7 @@ HMR 会重复求值 bundle，`apply()` 里做了幂等守卫：先 `dispose()` �
 # 安装（本地目录）
 dsh plugin --profile web add "C:\Users\laios\Documents\DSH - SIMPLE\dsh-session-dots"
 
-# 从 GitHub 安装
+# 从 GitHub 安装（pnpm 原生支持 github: 协议；本机未实测）
 dsh plugin --profile web add github:nysparia/dsh-session-dots
 
 # 卸载
