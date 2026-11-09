@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/index.js"],
+  "sourcesContent": ["// Host half: this plugin does all of its work in the browser (the dot lives in\n// the sidebar DOM), so the Node side only has to exist and stay inert.\nexport const name = 'dsh-session-dots'\nexport const inject = []\nexport function apply() {}\n"],
+  "mappings": ";AAEO,IAAM,OAAO;AACb,IAAM,SAAS,CAAC;AAChB,SAAS,QAAQ;AAAC;",
+  "names": []
+}

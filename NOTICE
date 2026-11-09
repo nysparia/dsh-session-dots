@@ -1,0 +1,16 @@
+dsh-session-dots
+================
+
+This plugin re-implements the sidebar status-dot behaviour of
+
+  dsh-sessions-manager
+  Copyright (c) 2026 TOBYCAI
+  https://github.com/TOBYCAI/dsh-sessions-manager
+  MIT License
+
+The host state -> dot state mapping (manual / running / feedback / done /
+error), the "done hides while the row is selected" rule, and the
+`dsm-manual-unread-v1` storage key are taken from that project so the two can
+coexist without disagreeing. No other part of the upstream plugin is included.
+
+The upstream license text is reproduced in ./LICENSE-UPSTREAM.

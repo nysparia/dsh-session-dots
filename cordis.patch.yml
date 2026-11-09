@@ -1,0 +1,16 @@
+# dsh-session-dots bundle patch: inserts one plugin row.
+#
+# Defaults live in code; override any of them in the profile's
+# cordis.patch.yml by targeting this id, e.g.:
+#
+#   - update:
+#       - id: dsh-session-dots
+#         config:
+#           mode: overlay
+#           colors:
+#             running: '#facc15'
+#             feedback: '#ff5a1f'
+#           feedbackMarker: pulse
+- insert:
+    - id: dsh-session-dots
+      name: dsh-session-dots
