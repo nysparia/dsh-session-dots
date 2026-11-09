@@ -19,6 +19,7 @@
     - id: dsh-session-dots
       config:
         mode: overlay            # overlay | own | off
+        targets: [dsm]           # dsm | native（可同时给两个）
         size: 8                  # own 模式圆点直径，4–16
         offset: 6                # own 模式距行首，-8–32
         ringWidth: 3             # 审批环宽度，0–6
@@ -34,6 +35,17 @@
 ```
 
 配色只接受普通 CSS 颜色（`#rgb`、`#rrggbb`、`rgb()`、`var(--x)`），长度 ≤64，含 `; { } < > \\` 的值会被丢弃并回退默认——因为它会被拼进样式表。
+
+## targets：改谁的点
+
+| 值 | 目标选择器 | 什么时候可见 |
+|---|---|---|
+| `dsm`（默认） | `[data-dsd-state="x"] .dsm-dot` | 有别的插件（如 `dsh-sessions-manager`）在画点时 |
+| `native` | `[data-dsd-state="x"] [data-state]` | 没有任何插件画点、宿主自己那个原生点露出来时 |
+
+两个都写就两条都发：`targets: [dsm, native]`。这样无论旁边有没有别的圆点插件，overlay 模式都能上色。
+
+`own` 模式不依赖 targets——它自己画点，并同时隐藏 `.dsm-dot` 与行内 `[data-state]`，避免出现两个点。
 
 ## 状态语义
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-dots",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Configurable sidebar session status dots for DeepSeek Harness: recolour the official dot in place (overlay) or draw your own, with a distinct waiting-for-approval marker.",
   "type": "module",

@@ -8,9 +8,15 @@
 
 export const STATES = ['manual', 'running', 'feedback', 'done', 'error']
 
+// Which elements a dot can live on:
+//   dsm    — the .dsm-dot element another plugin (dsh-sessions-manager) draws
+//   native — the host's own [data-state] element, visible when nobody hides it
+export const TARGETS = ['dsm', 'native']
+
 export const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
   mode: 'overlay',
+  targets: Object.freeze(['dsm']),
   size: 8,
   offset: 6,
   ringWidth: 3,
@@ -45,6 +51,16 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, n))
 }
 
+export function normalizeTargets(value) {
+  const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  const out = []
+  for (const item of raw) {
+    const target = String(item).trim().toLowerCase()
+    if (TARGETS.includes(target) && !out.includes(target)) out.push(target)
+  }
+  return out.length ? out : [...DEFAULT_CONFIG.targets]
+}
+
 export function normalizeConfig(raw) {
   const c = raw && typeof raw === 'object' ? raw : {}
   const colors = { ...DEFAULT_CONFIG.colors }
@@ -60,6 +76,7 @@ export function normalizeConfig(raw) {
   return {
     enabled: mode !== 'off',
     mode,
+    targets: normalizeTargets(c.targets),
     size: clampNumber(c.size, 4, 16, DEFAULT_CONFIG.size),
     offset: clampNumber(c.offset, -8, 32, DEFAULT_CONFIG.offset),
     ringWidth: clampNumber(c.ringWidth, 0, 6, DEFAULT_CONFIG.ringWidth),
@@ -94,22 +111,40 @@ export function resolveDotState({ manualUnread = false, dataState = '', isActive
   }
 }
 
+const SELECTOR_OF = {
+  dsm: (state) => `[data-dsd-state="${state}"] .dsm-dot`,
+  native: (state) => `[data-dsd-state="${state}"] [data-state]`,
+}
+const FEEDBACK_OF = {
+  dsm: '[data-dsd-state="feedback"] .dsm-dot',
+  native: '[data-dsd-state="feedback"] [data-state]',
+}
+
 function colorDeclarations(selectorFor, colors) {
   return STATES.map((state) => `${selectorFor(state)}{background:${colors[state]} !important}`).join('\n')
 }
 
 /**
  * Builds the stylesheet for both modes.
- * - overlay: recolours the dot another plugin already drew (selectors key off
- *   the row attribute we set, so no dependency on its inline colour strings).
- * - own: recolours and shapes the dot we draw ourselves.
+ * - overlay: recolours dots another plugin / the host already drew. Selectors
+ *   key off the row attribute we set, so they do not depend on load order or on
+ *   the other plugin's inline colour strings.
+ * - own: recolours and shapes the dot we draw ourselves, and hides every foreign
+ *   dot first.
  */
 export function buildCss(config) {
   const cfg = normalizeConfig(config)
   if (!cfg.enabled) return ''
 
-  const overlay = colorDeclarations((s) => `[data-dsd-state="${s}"] .dsm-dot`, cfg.colors)
-  const own = colorDeclarations((s) => `[data-dsd-state="${s}"] .dsd-dot`, cfg.colors)
+  const overlay = cfg.targets
+    .map((target) => colorDeclarations(SELECTOR_OF[target], cfg.colors))
+    .join('\n')
+  const own = colorDeclarations((state) => `[data-dsd-state="${state}"] .dsd-dot`, cfg.colors)
+
+  const markerTargets = [
+    ...cfg.targets.map((target) => FEEDBACK_OF[target]),
+    '[data-dsd-state="feedback"] .dsd-dot',
+  ]
 
   const marker = cfg.feedbackMarker
   let markerCss = ''
@@ -117,17 +152,12 @@ export function buildCss(config) {
     markerCss = ''
   } else if (marker === 'diamond') {
     markerCss = `
-[data-dsd-state="feedback"] .dsm-dot,
-[data-dsd-state="feedback"] .dsd-dot{border-radius:2px !important;transform:translateY(-50%) rotate(45deg) !important}`
+${markerTargets.join(',\n')}{border-radius:2px !important;transform:translateY(-50%) rotate(45deg) !important}`
   } else {
     const ring = `box-shadow:0 0 0 ${cfg.ringWidth}px ${cfg.colors.feedback} !important`
-    const pulse =
-      marker === 'pulse'
-        ? `animation:dsd-pulse 1.4s ease-in-out infinite !important`
-        : ''
+    const pulse = marker === 'pulse' ? `animation:dsd-pulse 1.4s ease-in-out infinite !important` : ''
     markerCss = `
-[data-dsd-state="feedback"] .dsm-dot,
-[data-dsd-state="feedback"] .dsd-dot{${ring};${pulse}}
+${markerTargets.join(',\n')}{${ring};${pulse}}
 @keyframes dsd-pulse{0%,100%{box-shadow:0 0 0 ${cfg.ringWidth}px ${cfg.colors.feedback}}50%{box-shadow:0 0 0 ${cfg.ringWidth + 3}px transparent}}`
   }
 
@@ -135,7 +165,13 @@ export function buildCss(config) {
 .dsd-dot{position:absolute;left:${cfg.offset}px;top:50%;transform:translateY(-50%);width:${cfg.size}px;height:${cfg.size}px;border-radius:50%;box-sizing:border-box;z-index:2;pointer-events:none}
 .dsd-dot[data-dsd-clickable="1"]{pointer-events:auto;cursor:pointer}`
 
-  const hideNative = cfg.mode === 'own' ? '\n.dsm-dot{display:none !important}' : ''
+  // own mode owns the dot slot, so every foreign dot goes away — both the one
+  // another plugin draws and the host's own element (which is what surfaces when
+  // no other dot plugin is installed).
+  const hideForeign =
+    cfg.mode === 'own'
+      ? '\n.dsm-dot{display:none !important}\n[role="treeitem"] [data-state]{display:none !important}'
+      : ''
 
-  return [overlay, own, markerCss, ownBase, hideNative].filter(Boolean).join('\n')
+  return [overlay, own, markerCss, ownBase, hideForeign].filter(Boolean).join('\n')
 }

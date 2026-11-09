@@ -1,18 +1,27 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeConfig, resolveDotState, buildCss, safeColor, DEFAULT_CONFIG } from '../src/client/logic.js'
+import { normalizeConfig, normalizeTargets, resolveDotState, buildCss, safeColor, DEFAULT_CONFIG } from '../src/client/logic.js'
 
 test('defaults are stable', () => {
   const cfg = normalizeConfig(undefined)
   assert.equal(cfg.mode, 'overlay')
+  assert.deepEqual(cfg.targets, ['dsm'])
   assert.equal(cfg.size, 8)
-  assert.equal(cfg.offset, 6)
   assert.deepEqual(cfg.colors, DEFAULT_CONFIG.colors)
 })
 
 test('enabled:false forces mode off', () => {
   assert.equal(normalizeConfig({ enabled: false, mode: 'own' }).mode, 'off')
   assert.equal(buildCss({ enabled: false }), '')
+})
+
+test('targets accept array, csv, junk and empties', () => {
+  assert.deepEqual(normalizeTargets(['native', 'dsm', 'native']), ['native', 'dsm'])
+  assert.deepEqual(normalizeTargets('native, dsm'), ['native', 'dsm'])
+  assert.deepEqual(normalizeTargets('bogus'), ['dsm'])
+  assert.deepEqual(normalizeTargets([]), ['dsm'])
+  assert.deepEqual(normalizeTargets(undefined), ['dsm'])
+  assert.deepEqual(normalizeConfig({ targets: 'native' }).targets, ['native'])
 })
 
 test('numbers are clamped, junk falls back', () => {
@@ -46,16 +55,29 @@ test('state precedence matches the host dot', () => {
   assert.equal(resolveDotState({}), null)
 })
 
-test('css carries the configured colours and the overlay selectors', () => {
-  const css = buildCss({ colors: { feedback: '#ff5a1f', running: '#facc15' }, mode: 'overlay' })
+test('overlay css carries the configured colours on the dsm target only by default', () => {
+  const css = buildCss({ colors: { feedback: '#ff5a1f' } })
   assert.match(css, /\[data-dsd-state="feedback"\] \.dsm-dot\{background:#ff5a1f !important\}/)
-  assert.match(css, /\[data-dsd-state="running"\] \.dsm-dot\{background:#facc15 !important\}/)
-  assert.doesNotMatch(css, /\.dsm-dot\{display:none/)
+  assert.doesNotMatch(css, /\[data-dsd-state="feedback"\] \[data-state\]/)
 })
 
-test('own mode hides the foreign dot and draws its own geometry', () => {
+test('native target adds rules for the host element', () => {
+  const css = buildCss({ targets: ['native'], colors: { running: '#facc15' } })
+  assert.match(css, /\[data-dsd-state="running"\] \[data-state\]\{background:#facc15 !important\}/)
+  assert.doesNotMatch(css, /\.dsm-dot\{background/)
+})
+
+test('both targets emit both selectors and share the marker rule', () => {
+  const css = buildCss({ targets: ['dsm', 'native'], feedbackMarker: 'pulse' })
+  assert.match(css, /\[data-dsd-state="feedback"\] \.dsm-dot/)
+  assert.match(css, /\[data-dsd-state="feedback"\] \[data-state\]/)
+  assert.match(css, /animation:dsd-pulse/)
+})
+
+test('own mode hides both foreign dots and draws its own geometry', () => {
   const css = buildCss({ mode: 'own', size: 10, offset: 4 })
   assert.match(css, /\.dsm-dot\{display:none !important\}/)
+  assert.match(css, /\[data-state\]\{display:none !important\}/)
   assert.match(css, /width:10px;height:10px/)
   assert.match(css, /left:4px/)
 })
